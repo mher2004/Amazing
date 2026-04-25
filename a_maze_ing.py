@@ -2,20 +2,31 @@ import parceing
 from errors import ConfigFormatError
 from generator import MazeGenerator
 from math import ceil, floor
+import sys
 
 
 class Render:
-    def __init__(self, config, cells, solution):
+    def __init__(
+            self,
+            config: parceing.Config,
+            cells: list,
+            solution: dict):
         self.config = config
         self.entry_col = 32
         self.exit_col = 31
         self.cells = cells
-        self.solution = solution
+        self.set_sol(solution)
         self.show_path = False
 
+    def set_sol(self, solution: dict) -> None:
+        self.solution = solution
+
+    def switch_show_path(self) -> None:
+        self.show_path = not self.show_path
+
     def render_matrix(self) -> None:
-        # print(config)
-        border_symb = f"\033[{self.config.Color.value}m█\033[0m"
+        border_symb = f"\033\
+[{self.config.color.value}m█\033[0m"
         entry_symb = f"\033[{self.entry_col}m█\033[0m"
         exit_symb = f"\033[{self.exit_col}m█\033[0m"
         f2 = f"\033[{36}m█\033[0m"
@@ -96,6 +107,58 @@ class Render:
             print()
 
 
+class Output:
+    @classmethod
+    def write_file(
+            cls,
+            maze: list,
+            entry: tuple,
+            exit: tuple,
+            solution: dict,
+            output_file: str) -> None:
+        with open(output_file, "w") as f:
+            f.write(cls.gen_otput(maze, entry, exit, solution))
+
+    @classmethod
+    def gen_otput(
+            cls,
+            maze: list,
+            entry: tuple,
+            exit: tuple,
+            solution: dict) -> str:
+        res = str()
+        for row in maze:
+            for cell in row:
+                res += hex(int(cell.bords, 2))[-1].upper()
+            res += "\n"
+        res += "\n"
+        res += f"{entry[0]},{entry[1]}\n"
+        res += f"{exit[0]},{exit[1]}\n"
+        res += cls.gen_sol_str(solution)
+        res += "\n"
+        return res
+
+    @classmethod
+    def gen_sol_str(cls, solution: dict) -> str:
+        res = str()
+        seq = list()
+        curr = list(solution.keys())[-1]
+        while curr:
+            seq.append(curr)
+            curr = solution[curr]
+        seq.reverse()
+        for i in range(1, len(seq)):
+            if seq[i-1][0] > seq[i][0]:
+                res += "N"
+            elif seq[i-1][0] < seq[i][0]:
+                res += "S"
+            elif seq[i-1][1] < seq[i][1]:
+                res += "E"
+            elif seq[i-1][1] > seq[i][1]:
+                res += "W"
+        return res
+
+
 class Cell:
     def __init__(self, i: int, j: int) -> None:
         self.bords = "1111"
@@ -110,82 +173,80 @@ class Cell:
         self.is_path = False
 
 
-class Maze:
-    def __init__(self, width: int, height: int, config) -> None:
-        self.cells = [[Cell(i, j) for j in range(0, width)]
-                      for i in range(0, height)]
-        self.cells[config.entry[1]][config.entry[0]].is_entry = True
-        self.cells[config.exit[1]][config.exit[0]].is_exit = True
-        self.width = width
-        self.height = height
-        self.gen = MazeGenerator(config, self.cells, config.seed, self.gen_f2)
-        # self.solution = dict()
-        self.gen.generate(False)
-        self.solution = self.gen.solution
-        self.ren = Render(config, self.cells, self.solution)
-
-    def gen_f2(self) -> None:
-        ns = int((self.height - 5) / 2)
-        ws = int((self.width - 5) / 2)
-        self.cells[ns][ws].is_f2 = True
-        self.cells[ns+1][ws].is_f2 = True
-        self.cells[ns+2][ws].is_f2 = True
-        self.cells[ns+2][ws+1].is_f2 = True
-        self.cells[ns+2][ws+2].is_f2 = True
-        self.cells[ns+3][ws+2].is_f2 = True
-        self.cells[ns+4][ws+2].is_f2 = True
-        self.cells[ns][ws+4].is_f2 = True
-        self.cells[ns][ws+5].is_f2 = True
-        self.cells[ns][ws+6].is_f2 = True
-        self.cells[ns+1][ws+6].is_f2 = True
-        self.cells[ns+2][ws+6].is_f2 = True
-        self.cells[ns+2][ws+5].is_f2 = True
-        self.cells[ns+2][ws+4].is_f2 = True
-        self.cells[ns+3][ws+4].is_f2 = True
-        self.cells[ns+4][ws+4].is_f2 = True
-        self.cells[ns+4][ws+5].is_f2 = True
-        self.cells[ns+4][ws+6].is_f2 = True
+def clear_screen() -> None:
+    print("\033[2J\033[H", end="")
 
 
-def menu(config) -> None:
-    new = MazeGenerator(config.width, config.height, config.entry, config.exit)
-    new.generator(config.seed)
-    ren = Render(config, new.cells, new.solution)
-    ren.show_path = False
+def menu(config: parceing.Config) -> None:
+    alg = 0
+    gen = MazeGenerator(config.width, config.height, config.entry, config.exit)
+    gen.generator(config.seed, is_ft=config.is_ft,
+                  perfect=config.perfect, alg=alg)
+    ren = Render(config, gen.cells, gen.solution)
+    gen.set_anim_func(ren.print_mat)
+    Output.write_file(gen.cells, config.entry, config.exit,
+                      gen.solution, config.output_file)
+    prev_msg = str()
+    if not config.is_ft:
+        prev_msg = "Maze is not big enough to fit 42 pattern"
     while True:
+        clear_screen()
         ren.print_mat()
+        if prev_msg:
+            print(f"!!!!! {prev_msg} !!!!!\n", end="")
+        prev_msg = str()
         print("Select one of the options:")
-        print("1 - regenerate a new maze and display it")
+        print("1 - regenerate a gen maze and display it")
         print("2 - show/hide a valid shortest path from entry to the exit")
-        print("3 - change maze wall Color")
-        print("4 - Exit")
+        print("3 - change maze wall color")
+        print("4 - animate current generation")
+        print("5 - Change algorithm (DFS/Randomized Prim's)")
+        print("6 - Exit")
         try:
             option = int(input("Enter option:"))
-            if not (option >= 1 and option <= 4):
+            if not (option >= 1 and option <= 6):
                 raise ValueError()
             if option == 1:
-                new.generator()
-                ren.solution = new.solution
+                config.seed = gen.generator(
+                    is_ft=config.is_ft, perfect=config.perfect, alg=alg)
+                ren.set_sol(gen.solution)
+                Output.write_file(gen.cells, config.entry,
+                                  config.exit, gen.solution,
+                                  config.output_file)
             elif option == 2:
-                ren.show_path = not ren.show_path
+                ren.switch_show_path()
             elif option == 3:
                 print("Choose from: yellow, blue, white")
-                config.Color = input("Input new Color:")
+                config.color = input("Input new Color:")
             elif option == 4:
+                gen.generator(config.seed, is_ft=config.is_ft,
+                              perfect=config.perfect, animate=True, alg=alg)
+            elif option == 5:
+                alg = not alg
+                print(alg)
+            elif option == 6:
                 break
         except (TypeError, ValueError):
-            print("Wrong option type! Input a number from [1; 3]!")
+            prev_msg = "Wrong option type! Input a number from [1; 5]!"
         except ConfigFormatError as e:
             print(e)
 
 
 def main() -> None:
-    config = parceing.parce()
-    if not config:
+    argv = sys.argv
+    if len(argv) != 2:
+        print("Invalid atgv! Should be: python3 a_maze_ing.py <configfile>")
         return
-    menu(config)
-    # maze = Maze(config.width, config.height, config)
-    # menu(config, maze)
+    config_file = argv[1]
+    try:
+        config = parceing.parce(config_file)
+        if not config:
+            return
+        menu(config)
+    except ConfigFormatError as e:
+        print(e)
+    except Exception as e:
+        print(f"UnknownError:{e}")
 
 
 if __name__ == "__main__":

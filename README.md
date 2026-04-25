@@ -1,35 +1,31 @@
-*This project has been created as part of the 42 curriculum by \<login1\>[, \<login2\>[, \<login3\>]].*
+*This project has been created as part of the 42 curriculum by mmkrtchy and vpolikha.*
 
-# A-Maze-ing 🌀
+# A-Maze-ing
 
 ## Description
 
-A-Maze-ing is a Python maze generator that creates random mazes from a configuration file and outputs them in a hexadecimal wall-encoding format. The program supports both perfect mazes (exactly one path between entry and exit) and imperfect mazes, includes a visual "42" pattern embedded in the maze, and provides an interactive terminal or graphical display with pathfinding.
+A-Maze-ing is a Python maze generator and visualizer. Given a configuration file, it generates a random maze — optionally perfect (exactly one path between entry and exit) — renders it in the terminal using colored block characters, and writes the result to an output file in a hexadecimal wall-encoding format. The maze always contains a hidden **"42" pattern** made of fully closed cells (when the maze is large enough), and a shortest-path solver is built in.
 
-Key features:
-- Random maze generation with optional seed for reproducibility
-- Perfect maze support (unique path from entry to exit)
-- Hexadecimal output file format encoding wall states per cell
-- Visual representation via terminal (ASCII/color) or MiniLibX (MLX)
-- Interactive controls: regenerate, show/hide solution path, change wall colors
-- Embedded "42" pattern made of fully closed cells
-- Reusable `MazeGenerator` class packaged as a pip-installable module (`mazegen-*`)
+**Features:**
+- Two generation algorithms: Depth-First Search (recursive backtracker) and Randomized Prim's
+- Perfect and imperfect maze modes
+- Seed-based reproducibility
+- Terminal color customization (white, blue, yellow)
+- Show/hide shortest path overlay
+- Generation animation mode
+- Bonus: algorithm switching at runtime
 
 ---
 
 ## Instructions
-
-### Requirements
-
-- Python 3.10 or later
-- `pip`, `uv`, or `pipx` for dependency management
-- (Optional) MiniLibX for graphical display
 
 ### Installation
 
 ```bash
 make install
 ```
+
+This installs all dependencies from `requirements.txt` (pydantic).
 
 ### Running
 
@@ -39,18 +35,11 @@ make run
 python3 a_maze_ing.py config.txt
 ```
 
-### Debug mode
-
-```bash
-make debug
-```
-
 ### Linting
 
 ```bash
-make lint
-# optional strict mode:
-make lint-strict
+make lint          # flake8 + mypy with standard flags
+make lint-strict   # flake8 + mypy --strict
 ```
 
 ### Cleaning
@@ -61,166 +50,175 @@ make clean
 
 ---
 
-## Configuration File
+## Configuration File Format
 
-The configuration file uses one `KEY=VALUE` pair per line. Lines starting with `#` are treated as comments and ignored.
+The config file uses `KEY=VALUE` pairs, one per line. Lines starting with `#` are comments and are ignored.
 
-### Mandatory Keys
+| Key           | Required | Description                                 | Example                  |
+|---------------|----------|---------------------------------------------|--------------------------|
+| `WIDTH`       | Yes      | Maze width in cells (≥ 1)                   | `WIDTH=18`               |
+| `HEIGHT`      | Yes      | Maze height in cells (≥ 1)                  | `HEIGHT=10`              |
+| `ENTRY`       | Yes      | Entry cell coordinates as `x,y`             | `ENTRY=0,0`              |
+| `EXIT`        | Yes      | Exit cell coordinates as `x,y`              | `EXIT=13,9`              |
+| `OUTPUT_FILE` | Yes      | Path to write the output maze file          | `OUTPUT_FILE=out.txt`    |
+| `PERFECT`     | Yes      | `True` for a perfect maze, `False` otherwise| `PERFECT=True`           |
+| `SEED`        | No       | Seed string for reproducibility             | `SEED=asdda`             |
+| `COLOR`       | No       | Wall color: `white`, `blue`, or `yellow`    | `COLOR=blue`             |
 
-| Key           | Description                        | Example                  |
-|---------------|------------------------------------|--------------------------|
-| `WIDTH`       | Maze width in cells                | `WIDTH=20`               |
-| `HEIGHT`      | Maze height in cells               | `HEIGHT=15`              |
-| `ENTRY`       | Entry coordinates (x,y)            | `ENTRY=0,0`              |
-| `EXIT`        | Exit coordinates (x,y)             | `EXIT=19,14`             |
-| `OUTPUT_FILE` | Output filename                    | `OUTPUT_FILE=maze.txt`   |
-| `PERFECT`     | Whether the maze is perfect        | `PERFECT=True`           |
-
-### Optional Keys
-
-| Key         | Description                                      | Example              |
-|-------------|--------------------------------------------------|----------------------|
-| `SEED`      | Integer seed for reproducible generation         | `SEED=42`            |
-| `ALGORITHM` | Generation algorithm (`recursive`, `prim`, etc.) | `ALGORITHM=recursive`|
-| `DISPLAY`   | Display mode (`terminal` or `mlx`)               | `DISPLAY=terminal`   |
-
-### Example `config.txt`
-
+**Example `config.txt`:**
 ```
-# A-Maze-ing configuration
-WIDTH=20
-HEIGHT=15
+WIDTH=18
+HEIGHT=10
 ENTRY=0,0
-EXIT=19,14
-OUTPUT_FILE=maze.txt
+EXIT=13,9
+OUTPUT_FILE=out.txt
 PERFECT=True
-SEED=42
-ALGORITHM=recursive
-DISPLAY=terminal
+SEED=asdda
+COLOR=blue
 ```
+
+> The "42" pattern is only rendered when `WIDTH ≥ 9` and `HEIGHT ≥ 7`. If the maze is too small, a warning is printed.
 
 ---
 
 ## Output File Format
 
-Each cell is encoded as a single hexadecimal digit where each bit indicates a closed wall:
+Each cell is encoded as a single uppercase hexadecimal digit, where each bit represents a wall:
 
 | Bit | Direction |
 |-----|-----------|
-| 0 (LSB) | North |
-| 1       | East  |
-| 2       | South |
-| 3       | West  |
+| 0   | North |
+| 1   | East  |
+| 2   | South |
+| 3   | West  |
 
-- Bit = `1` → wall is **closed**
-- Bit = `0` → wall is **open**
+`1` = wall closed, `0` = wall open.
 
-Cells are written row by row, one row per line. After the grid, an empty line is followed by three lines:
-1. Entry coordinates (`x,y`)
-2. Exit coordinates (`x,y`)
-3. Shortest path from entry to exit using `N`, `E`, `S`, `W`
-
-**Example:**
-```
-9515391539551795151151153
-EBABAE812853C1412BA812812
-...
-
-1,1
-19,14
-SWSESWSESWSSSEESEEENEESESEESSSSEEESSSEEENNENEE
-```
+Cells are written row by row, one row per line. After a blank line, three more lines follow: entry coordinates, exit coordinates, and the shortest path expressed as a sequence of `N`, `E`, `S`, `W` steps.
 
 ---
 
-## Maze Generation Algorithm
+## Maze Generation Algorithms
 
-This project uses the **Recursive Backtracker** (depth-first search) algorithm.
+Two algorithms are available and can be switched at runtime (option 5 in the menu):
 
-### Why this algorithm?
+### Algorithm 0 — Depth-First Search (Recursive Backtracker)
+Starting from the entry cell, the generator picks a random unvisited neighbor, removes the wall between them, and recurses. When it hits a dead end it backtracks. This tends to produce mazes with long winding corridors and relatively few dead ends.
 
-- Produces long, winding corridors that make for challenging and visually interesting mazes
-- Naturally generates **perfect mazes** (a single unique path between any two cells), which is a core requirement of this project
-- Simple to implement and easy to extend with a seed for reproducibility
-- Straightforward to constrain for the "no 3×3 open area" rule and the embedded "42" pattern
+**Why we chose it as the default:** DFS is simple to implement correctly, produces visually interesting mazes, and runs efficiently. Its stack-based nature maps cleanly onto the perfect-maze requirement.
+
+### Algorithm 1 — Randomized Prim's
+Starting from the entry, the generator maintains a frontier of cells adjacent to the already-visited region. It picks a random frontier cell, connects it to a random visited neighbor, and expands the frontier. This produces mazes with a more uniform texture and more branching than DFS.
 
 ---
 
 ## Visual Representation
 
-The program offers two display modes:
+The terminal renderer uses Unicode block characters (`█`) with ANSI color codes. The display shows:
 
-**Terminal (default):** Renders the maze using colored ASCII characters in the terminal.
+- **Walls** — colored blocks (white / blue / yellow, configurable)
+- **Entry** — green block
+- **Exit** — red block
+- **"42" pattern** — cyan blocks
+- **Shortest path** — yellow blocks (toggle with option 2)
 
-**MiniLibX (MLX):** Opens a graphical window for a richer visual experience.
+### Interactive Menu
 
-### Interactive Controls
-
-| Action | Terminal | MLX |
-|--------|----------|-----|
-| Re-generate maze | `1` | `1` |
-| Show/Hide solution path | `2` | `2` |
-| Rotate/Change wall colors | `3` | `3` |
-| Quit | `4` | `4` |
+| Option | Action |
+|--------|--------|
+| 1 | Regenerate maze with a new random seed |
+| 2 | Show / hide shortest path |
+| 3 | Change wall color (white / blue / yellow) |
+| 4 | Animate the current generation algorithm |
+| 5 | Switch algorithm (DFS ↔ Randomized Prim's) |
+| 6 | Exit |
 
 ---
 
 ## Reusable Module — `mazegen`
 
-The maze generation logic is packaged as a standalone pip-installable module.
+The maze generation logic lives entirely in `generator.py` as the `MazeGenerator` class. It has no dependency on the display or config-parsing code and can be imported independently.
 
-### Installation
-
-```bash
-pip install mazegen-1.0.0-py3-none-any.whl
-# or
-pip install mazegen-1.0.0.tar.gz
-```
-
-### Basic Usage
+### Quick Start
 
 ```python
-from mazegen import MazeGenerator
+from generator import MazeGenerator
 
-# Instantiate with width, height, and optional seed
-gen = MazeGenerator(width=20, height=15, seed=42)
+# Create a 20×15 maze with entry at (0,0) and exit at (19,14)
+gen = MazeGenerator(width=20, height=15, entry=(0, 0), exit=(19, 14))
 
-# Generate a perfect maze
-gen.generate(perfect=True)
+# Generate with a fixed seed, DFS algorithm, perfect maze
+seed = gen.generator(seed="my_seed", alg=0, perfect=True)
 
-# Access the maze grid (2D list of wall bitmasks)
-grid = gen.maze  # grid[row][col] is an int 0–15
+# Access the cell grid
+for row in gen.cells:
+    for cell in row:
+        print(cell.bords, end=" ")  # e.g. "1011" = walls on N, S, W
+    print()
 
-# Get the shortest solution path
-solution = gen.solve(entry=(0, 0), exit=(19, 14))
-# Returns a list of directions: ['S', 'E', 'E', ...]
-
-# Access entry/exit
-print(gen.entry)  # (0, 0)
-print(gen.exit)   # (19, 14)
+# Access the solution (dict mapping (i,j) → parent (i,j) or None for entry)
+print(gen.solution)
 ```
 
 ### Custom Parameters
 
-```python
-gen = MazeGenerator(
-    width=30,
-    height=20,
-    seed=123,
-    algorithm="prim"  # if multiple algorithms are supported
-)
-gen.generate(perfect=False)
-```
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `width` | `int` | Number of columns |
+| `height` | `int` | Number of rows |
+| `entry` | `tuple[int,int]` | `(x, y)` of the entry cell |
+| `exit` | `tuple[int,int]` | `(x, y)` of the exit cell |
+| `seed` | `str \| None` | RNG seed; uses `time.time()` if `None` |
+| `alg` | `int` | `0` = DFS, `1` = Randomized Prim's |
+| `perfect` | `bool` | `True` = single path between entry and exit |
+| `is_ft` | `bool` | `True` = embed the "42" pattern |
+| `animate` | `bool` | `True` = call `anim_func` each step |
 
-> **Note:** The internal `maze` grid uses the same bitmask encoding as the output file (bit 0 = North, bit 1 = East, bit 2 = South, bit 3 = West), but the module exposes it as a Python list of lists — not the flat text file format.
+### Accessing the Generated Structure
+
+After calling `generator()`:
+
+- `gen.cells[i][j]` — a `Cell` object with:
+  - `bords: str` — 4-character binary string `"NESW"` (`'1'` = wall present)
+  - `i, j` — row and column indices
+  - `is_entry`, `is_exit`, `is_f2`, `is_visited` — boolean flags
+- `gen.solution` — `dict[(i,j), (i,j) | None]` — BFS parent map from entry to exit
 
 ### Building the Package
 
 ```bash
-python3 -m pip install build
-python3 -m build
-# Output: dist/mazegen-1.0.0-py3-none-any.whl and dist/mazegen-1.0.0.tar.gz
+pip install build
+python -m build
+# produces dist/mazegen-1.0.0-py3-none-any.whl and dist/mazegen-1.0.0.tar.gz
 ```
+
+Install in any virtualenv:
+```bash
+pip install mazegen-1.0.0-py3-none-any.whl
+```
+
+---
+
+## Resources
+
+### Maze Generation
+- [Maze generation algorithm — Wikipedia](https://en.wikipedia.org/wiki/Maze_generation_algorithm)
+- [Jamis Buck's "Think Labyrinth" — comprehensive algorithm guide](http://www.astrolog.org/labyrnth/algrithm.htm)
+- [Prim's algorithm — Wikipedia](https://en.wikipedia.org/wiki/Prim%27s_algorithm)
+
+### Python / Libraries
+- [Pydantic v2 documentation](https://docs.pydantic.dev/latest/)
+- [Python `collections.deque`](https://docs.python.org/3/library/collections.html#collections.deque)
+- [ANSI escape codes reference](https://en.wikipedia.org/wiki/ANSI_escape_code)
+- [flake8](https://flake8.pycqa.org/) / [mypy](https://mypy.readthedocs.io/)
+
+### AI Usage
+Claude (Anthropic) was used for:
+- Generating this README from project files and subject requirements.
+- Reviewing docstring and type hint completeness.
+- Suggesting edge cases to test in the config parser.
+
+All generated content was reviewed, tested, and understood by the team before inclusion.
 
 ---
 
@@ -228,59 +226,24 @@ python3 -m build
 
 ### Roles
 
-| Member | Role |
-|--------|------|
-| `<login1>` | Maze generation algorithm, core logic, reusable module |
-| `<login2>` | Output file format, config parser, error handling |
-| `<login3>` | Visual display (terminal + MLX), pathfinding, UI interactions |
+| Member | Responsibilities |
+|--------|-----------------|
+| **mmkrtchy** | Core maze generator (`generator.py`, DFS/RP), BFS solver, Makefile |
+| **vpolikha** | Config parser (`parce.py`), terminal renderer (`a_maze_ing.py`), interactive menu, error handling |
 
 ### Planning
 
-**Week 1:** Project setup, config parser, core maze data structures, algorithm research  
-**Week 2:** Recursive backtracker implementation, output file generation, "42" pattern embedding  
-**Week 3:** Visual display (terminal ASCII), BFS pathfinding, interactive controls  
-**Week 4:** MLX graphical display, reusable package setup, README, linting, testing  
-
-The initial plan was optimistic on the MLX display timeline — it took longer than expected to handle window events cleanly. The "42" pattern placement also required more iteration to ensure it didn't break maze connectivity.
+Initially we planned to deliver the core generator and a basic renderer in the first week, then refine the config parser and add the interactive menu in the second. In practice, aligning the wall-encoding format between the generator and the renderer took longer than expected, and we added the Randomized Prim's algorithm as a bonus toward the end.
 
 ### What Worked Well
-
-- The recursive backtracker naturally produces clean perfect mazes
-- Splitting generation and display into separate modules made testing much easier
-- Using a seed from the start made debugging consistent
+- Keeping `MazeGenerator` completely decoupled from display code made testing straightforward and satisfies the reusability requirement cleanly.
+- Using Pydantic for config validation caught bad inputs early with clear error messages.
 
 ### What Could Be Improved
-
-- The 3×3 open area constraint adds complexity to post-processing; integrating it directly into generation would be cleaner
-- MLX event handling could be abstracted further for easier extension
+- The `Cell` class is duplicated across `generator.py` and `a_maze_ing.py`; a shared `models.py` (already present but not fully adopted) should be the single source of truth.
+- The animation mode blocks the interactive menu loop; a cleaner design would use a separate thread or async approach.
 
 ### Tools Used
-
-- **Python 3.11** — main language
-- **flake8 + mypy** — linting and type checking
-- **pytest** — unit testing
-- **build / pip** — package management
-- **MiniLibX** — graphical display
-- **Claude (Anthropic)** — used to help draft docstrings, brainstorm algorithm tradeoffs, and review the README structure. All generated content was reviewed, tested, and rewritten as needed by the team.
-
----
-
-## Resources
-
-- [Maze generation algorithms — Wikipedia](https://en.wikipedia.org/wiki/Maze_generation_algorithm)
-- [Recursive Backtracker — Think Labyrinth](https://www.astrolog.org/labyrnth/algrithm.htm)
-- [Spanning trees and perfect mazes](https://en.wikipedia.org/wiki/Maze_generation_algorithm#Randomized_depth-first_search)
-- [Python `typing` module — docs](https://docs.python.org/3/library/typing.html)
-- [flake8 documentation](https://flake8.pycqa.org/)
-- [mypy documentation](https://mypy.readthedocs.io/)
-- [Python packaging guide](https://packaging.python.org/en/latest/tutorials/packaging-projects/)
-- [PEP 257 — Docstring Conventions](https://peps.python.org/pep-0257/)
-
-### AI Usage
-
-Claude (claude.ai) was used to assist with:
-- Drafting and structuring this README
-- Reviewing docstring style for PEP 257 compliance
-- Discussing tradeoffs between maze generation algorithms (recursive backtracker vs. Prim's vs. Kruskal's)
-
-All AI-generated suggestions were critically reviewed, tested, and adapted by the team. No AI-generated code was used without full understanding and manual validation.
+- **Python 3.10+**, **Pydantic v2**, **mypy**, **flake8**
+- **Git** for version control
+- **Claude (Anthropic)** for documentation assistance (see AI Usage above)
